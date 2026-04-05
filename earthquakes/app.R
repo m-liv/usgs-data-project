@@ -13,6 +13,7 @@ library(leaflet)
 library(readr)
 library(lubridate)
 library(htmltools)
+library(tidyverse)
 
 # Load data
 quakes <- read_csv("usgs_sampled2.csv", show_col_types = FALSE) %>%
@@ -20,7 +21,7 @@ quakes <- read_csv("usgs_sampled2.csv", show_col_types = FALSE) %>%
     time = ymd_hms(time, quiet = TRUE),
     year = year(time),
     place = if_else(is.na(place) | place == "", "Unknown location", place)
-  )
+  ) %>% drop_na(mag, depth)
 
 min_year <- min(quakes$year, na.rm = TRUE)
 max_year <- max(quakes$year, na.rm = TRUE)
