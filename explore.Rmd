@@ -12,7 +12,7 @@ library(tidyverse)
 ```
 
 ```{r}
-quakes <- read_csv("usgs_800.csv")
+quakes <- read_csv("usgs_sampled2.csv")
 ```
 
 ```{r}
@@ -21,7 +21,8 @@ quakes2 <- quakes %>%
     time = ymd_hms(time, quiet = TRUE),
     year = year(time),
     place = if_else(is.na(place) | place == "", "Unknown location", place)
-  )
+  ) %>% drop_na(mag, depth)
+
 head(quakes2)
 ```
 
