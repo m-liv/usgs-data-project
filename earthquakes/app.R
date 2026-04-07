@@ -1,44 +1,54 @@
-#
-# This is a Shiny web application. You can run the application by clicking
-# the 'Run App' button above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
-#
-
 library(shiny)
 library(dplyr)
 library(leaflet)
 library(readr)
 library(lubridate)
 library(htmltools)
-library(tidyverse)
+library(ggplot2)
+library(tidyr)
 
 # Load data
 quakes <- read_csv("usgs_sampled2.csv", show_col_types = FALSE) %>%
   mutate(
     time = ymd_hms(time, quiet = TRUE),
     year = year(time),
-    place = if_else(is.na(place) | place == "", "Unknown location", place)
-  ) %>% drop_na(mag, depth)
+    place = if_else(is.na(place) | place == "", "Unknown location", place),
+    continent = case_when(
+      latitude >= -60 & latitude <= 90 & longitude >= -170 & longitude <= -30 ~ "North America",
+      latitude >= -60 & latitude <= 15  & longitude >= -85  & longitude <= -30 ~ "South America",
+      latitude >= 35  & latitude <= 70  & longitude >= -10  & longitude <= 40  ~ "Europe",
+      latitude >= -35 & latitude <= 35  & longitude >= -20  & longitude <= 55  ~ "Africa",
+      latitude >= 5   & latitude <= 80  & longitude >= 40   & longitude <= 180 ~ "Asia",
+      latitude >= -50 & latitude <= 0   & longitude >= 110  & longitude <= 180 ~ "Oceania",
+      TRUE ~ "Other / Ocean"
+    ),
+    mag_cat = case_when(
+      mag < 3 ~ "Low (<3)",
+      mag >= 3 & mag < 5 ~ "Medium (3-5)",
+      mag >= 5 ~ "High (>=5)",
+      TRUE ~ "Unknown"
+    )
+  ) %>%
+  drop_na(mag, depth, latitude, longitude)
 
 min_year <- min(quakes$year, na.rm = TRUE)
 max_year <- max(quakes$year, na.rm = TRUE)
 
 # Load cities data
 cities <- read_csv("worldcities.csv", show_col_types = FALSE) %>%
-  filter(!is.na(lat), !is.na(lng), !is.na(city_ascii)) %>%
+  filter(!is.na(lat), !is.na(lng)) %>%
   mutate(
+    city_name = coalesce(city_ascii, city),
     lat = as.numeric(lat),
     lng = as.numeric(lng),
-    label = paste0(city_ascii, ", ", country)
+    label = paste0(city_name, ", ", country)
   ) %>%
+  distinct(label, .keep_all = TRUE) %>%
   arrange(label)
 
-# Use haversine formula to calculate distance in miles between coordinates
+# Haversine formula for distance in miles
 haversine_miles <- function(lat1, lng1, lat2, lng2) {
-  R <- 3958.8  # Earth radius in miles
+  R <- 3958.8
   phi1 <- lat1 * pi / 180
   phi2 <- lat2 * pi / 180
   dphi <- (lat2 - lat1) * pi / 180
@@ -49,23 +59,33 @@ haversine_miles <- function(lat1, lng1, lat2, lng2) {
 
 RADIUS_MILES <- 50
 
+default_city <- "Charlottesville, United States"
+
+
 ui <- fluidPage(
   titlePanel("USGS Earthquakes Explorer"),
   sidebarLayout(
     sidebarPanel(
+      width = 3,
       sliderInput(
         inputId = "selected_year",
-        label = "Choose a year:",
+        label = "Select year:",
         min = min_year,
         max = max_year,
         value = min_year,
         step = 1,
-        sep = ""
+        sep = "",
+        animate = animationOptions(interval = 800, loop = FALSE)
       ),
-      hr(),
+      selectInput(
+        inputId = "continent",
+        label = "Select continent:",
+        choices = c("All", sort(unique(quakes$continent))),
+        selected = "All"
+      ),
       selectizeInput(
         inputId = "selected_city",
-        label = "Filter by city (50-mile radius):",
+        label = "Select city:",
         choices = c("None (show all)" = "", setNames(cities$label, cities$label)),
         selected = "",
         options = list(
@@ -75,35 +95,53 @@ ui <- fluidPage(
       ),
       conditionalPanel(
         condition = "input.selected_city != ''",
-        actionButton("clear_city", "Clear city filter", class = "btn-sm btn-outline-secondary",
-                     style = "margin-top: 4px;")
+        actionButton(
+          "clear_city",
+          "Clear city filter",
+          class = "btn-sm btn-outline-secondary",
+          style = "margin-top: 4px;"
+        )
       ),
-      hr(),
       p("Hover over a point to view earthquake details.")
     ),
     mainPanel(
-      leafletOutput("quake_map", height = 650)
+      width = 9,
+      leafletOutput("quake_map", height = 400),
+      br(),
+      plotOutput("scatter", height = 300)
     )
   )
 )
 
 server <- function(input, output, session) {
   
-  # Look up selected city
   selected_city_data <- reactive({
+    req(input$selected_city)
     req(input$selected_city != "")
     cities %>% filter(label == input$selected_city) %>% slice(1)
   })
   
-  # Clear city when button is pressed
   observeEvent(input$clear_city, {
     updateSelectizeInput(session, "selected_city", selected = "")
   })
   
-  filtered_quakes <- reactive({
-    df <- quakes %>% filter(year == input$selected_year)
+  # Shared filter for year and continent
+  year_continent_quakes <- reactive({
+    df <- quakes %>%
+      filter(year == input$selected_year)
     
-    if (input$selected_city != "") {
+    if (input$continent != "All") {
+      df <- df %>% filter(continent == input$continent)
+    }
+    
+    df
+  })
+  
+  # Map filter: year, continent, and city radius
+  filtered_quakes <- reactive({
+    df <- year_continent_quakes()
+    
+    if (!is.null(input$selected_city) && input$selected_city != "") {
       city_row <- selected_city_data()
       df <- df %>%
         filter(
@@ -111,23 +149,36 @@ server <- function(input, output, session) {
         )
     }
     
-    df
+    df %>% mutate(id = row_number())
+  })
+  
+  # Scatterplot filter: year and continent 
+  scatter_quakes <- reactive({
+    year_continent_quakes()
   })
   
   output$quake_map <- renderLeaflet({
-    leaflet() %>%
+    leaflet(options = leafletOptions(
+      worldCopyJump = TRUE,
+      minZoom = 2,
+      maxZoom = 10
+    )) %>%
       addProviderTiles(providers$CartoDB.Positron) %>%
       setView(lng = -98.5, lat = 39.8, zoom = 4)
   })
   
-  # Zoom the map into the newly selected city
   observeEvent(input$selected_city, {
-    if (input$selected_city != "") {
+    if (!is.null(input$selected_city) && input$selected_city != "") {
       city_row <- selected_city_data()
+      
       leafletProxy("quake_map") %>%
-        flyTo(lng = city_row$lng, lat = city_row$lat, zoom = 8)
+        flyTo(
+          lng = city_row$lng,
+          lat = city_row$lat,
+          zoom = 8
+        )
     }
-  })
+  }, ignoreInit = FALSE)
   
   observe({
     dat <- filtered_quakes()
@@ -143,10 +194,10 @@ server <- function(input, output, session) {
       clearControls() %>%
       clearShapes()
     
-    # 50-mile radius circle for selected city
-    if (input$selected_city != "") {
+    if (!is.null(input$selected_city) && input$selected_city != "") {
       city_row <- selected_city_data()
       radius_meters <- RADIUS_MILES * 1609.34
+      
       proxy <- proxy %>%
         addCircles(
           lng = city_row$lng,
@@ -178,6 +229,7 @@ server <- function(input, output, session) {
       addCircleMarkers(
         lng = ~longitude,
         lat = ~latitude,
+        layerId = ~id,
         radius = ~pmax(3, mag * 2),
         stroke = TRUE,
         weight = 1,
@@ -189,12 +241,13 @@ server <- function(input, output, session) {
           "<b>Time:</b> ", format(time, "%Y-%m-%d %H:%M:%S"), " UTC<br>",
           "<b>Magnitude:</b> ", round(mag, 2), "<br>",
           "<b>Depth:</b> ", round(depth, 2), " km<br>",
+          "<b>Continent:</b> ", continent, "<br>",
           "<b>Type:</b> ", type
         )),
         label = ~lapply(
           paste0(
-            "Location: ", place, "\n",
-            "Magnitude: ", round(mag, 2), "\n",
+            "Location: ", place, "<br>",
+            "Magnitude: ", round(mag, 2), "<br>",
             "Depth: ", round(depth, 2), " km"
           ),
           HTML
@@ -216,6 +269,26 @@ server <- function(input, output, session) {
         title = "Magnitude",
         opacity = 0.8
       )
+  })
+  
+  output$scatter <- renderPlot({
+    data <- scatter_quakes()
+    
+    ggplot(data, aes(x = depth, y = mag, color = mag_cat)) +
+      geom_point(alpha = 0.7, size = 2) +
+      scale_color_manual(values = c(
+        "Low (<3)" = "blue",
+        "Medium (3-5)" = "green",
+        "High (>=5)" = "red",
+        "Unknown" = "gray"
+      )) +
+      labs(
+        x = "Depth (km)",
+        y = "Magnitude",
+        color = "Magnitude Category",
+        title = paste("Earthquake Depth vs Magnitude in", input$selected_year)
+      ) +
+      theme_minimal()
   })
 }
 
