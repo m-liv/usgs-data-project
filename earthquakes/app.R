@@ -33,6 +33,8 @@ quakes <- read_csv("usgs_sampled2.csv", show_col_types = FALSE) %>%
 
 min_year <- min(quakes$year, na.rm = TRUE)
 max_year <- max(quakes$year, na.rm = TRUE)
+min_mag <- floor(min(quakes$mag, na.rm = TRUE))
+max_mag <- ceiling(max(quakes$mag, na.rm = TRUE))
 
 # Load cities data
 cities <- read_csv("worldcities.csv", show_col_types = FALSE) %>%
@@ -59,9 +61,6 @@ haversine_miles <- function(lat1, lng1, lat2, lng2) {
 
 RADIUS_MILES <- 50
 
-default_city <- "Charlottesville, United States"
-
-
 ui <- fluidPage(
   titlePanel("USGS Earthquakes Explorer"),
   sidebarLayout(
@@ -76,6 +75,14 @@ ui <- fluidPage(
         step = 1,
         sep = "",
         animate = animationOptions(interval = 800, loop = FALSE)
+      ),
+      sliderInput(
+        inputId = "selected_mag",
+        label = "Select maximum magnitude:",
+        min = min_mag,
+        max = max_mag,
+        value = max_mag,
+        step = 0.1
       ),
       selectInput(
         inputId = "continent",
@@ -137,9 +144,10 @@ server <- function(input, output, session) {
     df
   })
   
-  # Map filter: year, continent, and city radius
+  # Map filter: year, continent, max magnitude, and city radius
   filtered_quakes <- reactive({
-    df <- year_continent_quakes()
+    df <- year_continent_quakes() %>%
+      filter(mag <= input$selected_mag)
     
     if (!is.null(input$selected_city) && input$selected_city != "") {
       city_row <- selected_city_data()
@@ -152,7 +160,7 @@ server <- function(input, output, session) {
     df %>% mutate(id = row_number())
   })
   
-  # Scatterplot filter: year and continent 
+  # Scatterplot filter: year and continent
   scatter_quakes <- reactive({
     year_continent_quakes()
   })
@@ -178,7 +186,7 @@ server <- function(input, output, session) {
           zoom = 8
         )
     }
-  }, ignoreInit = FALSE)
+  }, ignoreInit = TRUE)
   
   observe({
     dat <- filtered_quakes()
@@ -286,7 +294,11 @@ server <- function(input, output, session) {
         x = "Depth (km)",
         y = "Magnitude",
         color = "Magnitude Category",
-        title = paste("Earthquake Depth vs Magnitude in", input$selected_year)
+        title = if (input$continent == "All") {
+          paste("Earthquake Depth vs Magnitude in", input$selected_year)
+        } else {
+          paste("Earthquake Depth vs Magnitude in", input$continent, "-", input$selected_year)
+        }
       ) +
       theme_minimal()
   })
