@@ -61,6 +61,9 @@ haversine_miles <- function(lat1, lng1, lat2, lng2) {
 
 RADIUS_MILES <- 50
 
+continents <- sort(unique(quakes$continent))
+continents <- c(setdiff(continents, "Other / Ocean"), "Other / Ocean")
+
 ui <- fluidPage(
   titlePanel("USGS Earthquakes Explorer"),
   sidebarLayout(
@@ -87,7 +90,7 @@ ui <- fluidPage(
       selectInput(
         inputId = "continent",
         label = "Select continent:",
-        choices = c("All", sort(unique(quakes$continent))),
+        choices = c("All", continents),
         selected = "All"
       ),
       selectizeInput(
