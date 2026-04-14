@@ -244,19 +244,23 @@ server <- function(input, output, session) {
         color = "white",
         fillColor = ~pal(mag),
         fillOpacity = 0.75,
-        popup = ~HTML(paste0(
-          "<b>", place, "</b><br>",
-          "<b>Time:</b> ", format(time, "%Y-%m-%d %H:%M:%S"), " UTC<br>",
-          "<b>Magnitude:</b> ", round(mag, 2), "<br>",
-          "<b>Depth:</b> ", round(depth, 2), " km<br>",
-          "<b>Continent:</b> ", continent, "<br>",
-          "<b>Type:</b> ", type
-        )),
+        popup = ~lapply(
+          paste0(
+            "<b>", place, "</b><br>",
+            "<b>Time:</b> ", format(time, "%Y-%m-%d %H:%M:%S"), " UTC<br>",
+            "<b>Magnitude:</b> ", round(mag, 2), "<br>",
+            "<b>Depth:</b> ", round(depth, 2), " km<br>",
+            "<b>Continent:</b> ", continent, "<br>"
+          ),
+          HTML
+        ),
         label = ~lapply(
           paste0(
-            "Location: ", place, "<br>",
-            "Magnitude: ", round(mag, 2), "<br>",
-            "Depth: ", round(depth, 2), " km"
+            "<b>", place, "</b><br>",
+            "<b>Time:</b> ", format(time, "%Y-%m-%d %H:%M:%S"), " UTC<br>",
+            "<b>Magnitude:</b> ", round(mag, 2), "<br>",
+            "<b>Depth:</b> ", round(depth, 2), " km<br>",
+            "<b>Continent:</b> ", continent, "<br>"
           ),
           HTML
         ),
