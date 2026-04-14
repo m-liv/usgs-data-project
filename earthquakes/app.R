@@ -10,12 +10,12 @@ library(tidyr)
 # Load data
 quakes <- read_csv("usgs_sampled2.csv", show_col_types = FALSE) %>%
   mutate(
-    time = ymd_hms(time, quiet = TRUE),
+    time = lubridate::parse_date_time(time, orders = c("Ymd HMS", "Y-m-d H:M:S")),
     year = year(time),
     place = if_else(is.na(place) | place == "", "Unknown location", place),
     continent = case_when(
-      latitude >= -60 & latitude <= 90 & longitude >= -170 & longitude <= -30 ~ "North America",
       latitude >= -60 & latitude <= 15  & longitude >= -85  & longitude <= -30 ~ "South America",
+      latitude >= -60 & latitude <= 90 & longitude >= -170 & longitude <= -30 ~ "North America",
       latitude >= 35  & latitude <= 70  & longitude >= -10  & longitude <= 40  ~ "Europe",
       latitude >= -35 & latitude <= 35  & longitude >= -20  & longitude <= 55  ~ "Africa",
       latitude >= 5   & latitude <= 80  & longitude >= 40   & longitude <= 180 ~ "Asia",
@@ -115,7 +115,25 @@ ui <- fluidPage(
       width = 9,
       leafletOutput("quake_map", height = 400),
       br(),
-      plotOutput("scatter", height = 300)
+      tabsetPanel(
+        tabPanel("Scatter Plot",
+                 plotOutput("scatter", height = 300)
+        ),
+        tabPanel("Depth Histogram",
+                 radioButtons(
+                   "hist_var",
+                   "",
+                   choices = c("Depth" = "depth", "Magnitude" = "mag")
+                 ),
+                 plotOutput("hist_depth", height = 300)
+        ),
+        tabPanel("Top Earthquakes",
+                 br(),
+                 plotOutput("top_quakes_plot", height = 300),
+                 br(),
+                 tableOutput("top_quakes_table")
+        )
+      )
     )
   )
 )
@@ -283,6 +301,33 @@ server <- function(input, output, session) {
       )
   })
   
+  top_quakes <- reactive({
+    
+    # Case 1: city selected → use radius-filtered data
+    if (!is.null(input$selected_city) && input$selected_city != "") {
+      df <- filtered_quakes()
+    } else {
+      # Case 2: no city → use continent/year filter only
+      df <- year_continent_quakes()
+    }
+    
+    df %>%
+      arrange(desc(mag)) %>%
+      slice_head(n = 5)
+  })
+  
+  
+  output$top_quakes_table <- renderTable({
+    top_quakes() %>%
+      select(
+        place,
+        mag,
+        depth,
+        time,
+        continent
+      )
+  })
+  
   output$scatter <- renderPlot({
     data <- scatter_quakes()
     
@@ -305,6 +350,54 @@ server <- function(input, output, session) {
         }
       ) +
       theme_minimal()
+  })
+  
+  #adjusting bar graph of magnitudes 
+  output$top_quakes_plot <- renderPlot({
+    df <- top_quakes()
+    
+    ggplot(df, aes(x = reorder(place, mag), y = mag)) +
+      geom_col(fill = "darkred") +
+      coord_flip() +
+      labs(
+        title = ifelse(
+          input$selected_city != "",
+          paste("Top 5 Strongest Earthquakes within", RADIUS_MILES, "miles"),
+          "Top 5 Strongest Earthquakes"
+        ),
+        x = "Location",
+        y = "Magnitude"
+      ) +
+      theme_minimal()
+  })
+  
+  
+  
+  #depth histogram
+  
+  output$hist_depth <- renderPlot({
+    data <- scatter_quakes()
+    
+    if(input$hist_var == "depth"){
+      ggplot(data, aes(x = depth)) +
+        geom_histogram(bins = 10, fill = "steelblue", color = "white") +
+        labs(
+          x = "Depth (km)",
+          y = "Count",
+          title = paste("Distribution of Earthquake Depths in", input$selected_year)
+        ) +
+        theme_minimal()
+    }
+    else {
+      ggplot(data, aes(x = mag)) +
+        geom_histogram(bins = 10, fill = "purple", color = "white") +
+        labs(
+          x = "Magnitude",
+          y = "Count",
+          title = paste("Distribution of Earthquake Magnitudes in", input$selected_year)
+        ) +
+        theme_minimal()
+    }
   })
 }
 
