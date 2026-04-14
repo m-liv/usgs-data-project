@@ -112,7 +112,12 @@ ui <- fluidPage(
           style = "margin-top: 4px;"
         )
       ),
-      p("Hover over a point to view earthquake details.")
+      p("Hover over a point to view earthquake details."),
+      h4("Summary Statistics"),
+      verbatimTextOutput("summary_stats"),
+      
+      h4("Local Risk Insight"),
+      verbatimTextOutput("city_stats")
     ),
     mainPanel(
       width = 9,
@@ -353,6 +358,32 @@ server <- function(input, output, session) {
         }
       ) +
       theme_minimal()
+  })
+  
+  output$summary_stats <- renderText({
+    data <- filtered_quakes()
+    
+    paste0(
+      "Earthquakes shown: ", nrow(data), "\n",
+      "Average magnitude: ", round(mean(data$mag, na.rm = TRUE), 2), "\n",
+      "Max magnitude: ", round(max(data$mag, na.rm = TRUE), 2)
+    )
+  })
+  output$city_stats <- renderText({
+    data <- filtered_quakes()
+    
+    if (is.null(input$selected_city) || input$selected_city == "") {
+      return("Select a city to view local earthquake risk.")
+    }
+    
+    total <- nrow(data)
+    
+    paste0(
+      "Earthquakes within 50 miles: ", total, "\n",
+      ifelse(total > 0,
+             paste0("Strongest nearby magnitude: ", round(max(data$mag), 2)),
+             "No recent nearby earthquakes")
+    )
   })
   
   #adjusting bar graph of magnitudes 
