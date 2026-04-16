@@ -6,9 +6,10 @@ library(lubridate)
 library(htmltools)
 library(ggplot2)
 library(tidyr)
+library(shinythemes)
 
 # Load data
-quakes <- read_csv("usgs_sampled2.csv", show_col_types = FALSE)%>%
+quakes <- read_csv("usgs_sampled2.csv", show_col_types = FALSE) %>%
   mutate(
     time = lubridate::parse_date_time(time, orders = c("Ymd HMS", "Y-m-d H:M:S")),
     year = year(time),
@@ -76,7 +77,23 @@ continents <- sort(unique(quakes$continent))
 continents <- c(setdiff(continents, "Other / Ocean"), "Other / Ocean")
 
 ui <- fluidPage(
+  theme = shinytheme("readable"), #adding theme, can remove or swtich to another theme
   titlePanel("USGS Earthquakes Explorer"),
+  
+  tags$style(HTML("
+  table {
+    font-size: 13px;
+  }
+")),
+  
+  tags$style(HTML("
+  h1, h2, h3 {
+    font-family: Verdana;
+    font-weight: 600;
+    font-size: 30px;
+    text-align: center;
+  }
+")),
   
   sidebarLayout(
     sidebarPanel(
@@ -192,12 +209,10 @@ ui <- fluidPage(
         tabPanel(
           "Top Earthquakes",
           
-          br(),
-          
           radioButtons(
             "show_table",
-            "Display table:",
-            choices = c("Show" = "yes", "Hide" = "no"),
+            "",
+            choices = c("Show Info Table" = "yes", "Hide Info Table" = "no"),
             selected = "yes",
             inline = TRUE
           ),
@@ -419,15 +434,14 @@ server <- function(input, output, session) {
       slice_head(n = 5)
   })
   
-  
   output$top_quakes_table <- renderTable({
     top_quakes() %>%
-      select(
-        place,
-        mag,
-        depth,
-        time,
-        continent
+      select(place, mag, depth, continent) %>%
+      rename(
+        Place = place,
+        Magnitude = mag,
+        Depth = depth,
+        Continent = continent
       )
   })
   
@@ -485,7 +499,19 @@ server <- function(input, output, session) {
           paste("Earthquake Depth vs Magnitude in", input$continent, "-", input$selected_year)
         }
       ) +
-      theme_minimal()
+      theme_minimal() + theme(
+        plot.title = element_text(
+          hjust = 0.5,
+          face = "bold",
+          size = 15
+        ),
+        axis.title.x = element_text(face = "bold", size = 11),
+        axis.title.y = element_text(face = "bold", size = 11), 
+        axis.text.x = element_text(color = "black", size = 11),
+        axis.text.y = element_text(color = "black", size = 11),
+        legend.title = element_text(size = 12, face = "bold", color = "black"),
+        legend.text = element_text(size = 11, color = "black")
+      )
   })
   
   output$summary_stats <- renderText({
@@ -530,7 +556,18 @@ server <- function(input, output, session) {
         x = "Location",
         y = "Magnitude"
       ) +
-      theme_minimal()
+      theme_minimal() + 
+      theme(
+        plot.title = element_text(
+          hjust = 0.5,
+          face = "bold",
+          size = 15
+        ),
+        axis.title.x = element_text(face = "bold", size = 10),
+        axis.title.y = element_text(face = "bold", size = 10), 
+        axis.text.x = element_text(color = "black", size = 11),
+        axis.text.y = element_text(color = "black", size = 11)
+      )
   })
   
 
@@ -542,23 +579,44 @@ server <- function(input, output, session) {
     
     if(input$hist_var == "depth"){
       ggplot(data, aes(x = depth)) +
-        geom_histogram(bins = 10, fill = "steelblue", color = "white") +
+        geom_histogram(bins = 8, fill = "steelblue", color = "white") +
         labs(
           x = "Depth (km)",
           y = "Count",
           title = paste("Distribution of Earthquake Depths in", input$selected_year)
         ) +
-        theme_minimal()
+        theme_minimal() + theme(
+          plot.title = element_text(
+            hjust = 0.5,
+            face = "bold",
+            size = 15
+          ),
+          axis.title.x = element_text(face = "bold", size = 11),
+          axis.title.y = element_text(face = "bold", size = 11), 
+          axis.text.x = element_text(color = "black", size = 11),
+          axis.text.y = element_text(color = "black", size = 11)
+        )
     }
     else {
       ggplot(data, aes(x = mag)) +
-        geom_histogram(bins = 10, fill = "purple", color = "white") +
+        geom_histogram(bins = 8, fill = "darkmagenta", color = "white") +
         labs(
           x = "Magnitude",
           y = "Count",
           title = paste("Distribution of Earthquake Magnitudes in", input$selected_year)
-        ) +
-        theme_minimal()
+        ) + 
+        theme_minimal() + 
+        theme(
+          plot.title = element_text(
+            hjust = 0.5,
+            face = "bold",
+            size = 15
+          ),
+          axis.title.x = element_text(face = "bold", size = 10),
+          axis.title.y = element_text(face = "bold", size = 10), 
+          axis.text.x = element_text(color = "black", size = 11),
+          axis.text.y = element_text(color = "black", size = 11)
+        )
     }
   })
 }
