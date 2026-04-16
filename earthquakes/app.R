@@ -7,21 +7,25 @@ library(htmltools)
 library(ggplot2)
 library(tidyr)
 
+get_continent <- function(lat, lon) {
+  case_when(
+    lat >= -60 & lat <= 15  & lon >= -85  & lon <= -30 ~ "South America",
+    lat >= -60 & lat <= 90  & lon >= -170 & lon <= -30 ~ "North America",
+    lat >= 35  & lat <= 70  & lon >= -10  & lon <= 40  ~ "Europe",
+    lat >= -35 & lat <= 35  & lon >= -20  & lon <= 55  ~ "Africa",
+    lat >= 5   & lat <= 80  & lon >= 40   & lon <= 180 ~ "Asia",
+    lat >= -50 & lat <= 0   & lon >= 110  & lon <= 180 ~ "Oceania",
+    TRUE ~ "Other / Ocean"
+  )
+}
+
 # Load data
 quakes <- read_csv("usgs_sampled2.csv", show_col_types = FALSE) %>%
   mutate(
     time = lubridate::parse_date_time(time, orders = c("Ymd HMS", "Y-m-d H:M:S")),
     year = year(time),
     place = if_else(is.na(place) | place == "", "Unknown location", place),
-    continent = case_when(
-      latitude >= -60 & latitude <= 15  & longitude >= -85  & longitude <= -30 ~ "South America",
-      latitude >= -60 & latitude <= 90 & longitude >= -170 & longitude <= -30 ~ "North America",
-      latitude >= 35  & latitude <= 70  & longitude >= -10  & longitude <= 40  ~ "Europe",
-      latitude >= -35 & latitude <= 35  & longitude >= -20  & longitude <= 55  ~ "Africa",
-      latitude >= 5   & latitude <= 80  & longitude >= 40   & longitude <= 180 ~ "Asia",
-      latitude >= -50 & latitude <= 0   & longitude >= 110  & longitude <= 180 ~ "Oceania",
-      TRUE ~ "Other / Ocean"
-    ),
+    continent = get_continent(latitude, longitude),
     mag_cat = case_when(
       mag < 3 ~ "Low (<3)",
       mag >= 3 & mag < 5 ~ "Medium (3-5)",
