@@ -27,6 +27,10 @@ quakes <- read_csv("usgs_sampled2.csv", show_col_types = FALSE) %>%
       mag >= 3 & mag < 5 ~ "Medium (3-5)",
       mag >= 5 ~ "High (>=5)",
       TRUE ~ "Unknown"
+    ),
+    land_ocean = case_when(
+      grepl("ocean|sea|gulf|offshore|mid-atlantic|ridge|trench|channel|strait|bay", place, ignore.case = TRUE) ~ "Ocean",
+      TRUE ~ "Land"
     )
   ) %>%
   drop_na(mag, depth, latitude, longitude)
@@ -140,6 +144,11 @@ ui <- fluidPage(
                  plotOutput("top_quakes_plot", height = 300),
                  br(),
                  tableOutput("top_quakes_table")
+        ),
+        tabPanel(
+          "Land vs Ocean",
+          br(),
+          plotOutput("land_ocean_plot", height = 300)
         )
       )
     )
@@ -147,6 +156,13 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
+  plot_title <- function(base) {
+    if (input$continent == "All") {
+      paste0(base, " (", input$selected_year, ")")
+    } else {
+      paste0(base, " in ", input$continent, " (", input$selected_year, ")")
+    }
+  }
   
   selected_city_data <- reactive({
     req(input$selected_city)
@@ -351,11 +367,7 @@ server <- function(input, output, session) {
         x = "Depth (km)",
         y = "Magnitude",
         color = "Magnitude Category",
-        title = if (input$continent == "All") {
-          paste("Earthquake Depth vs Magnitude in", input$selected_year)
-        } else {
-          paste("Earthquake Depth vs Magnitude in", input$continent, "-", input$selected_year)
-        }
+        title = plot_title("Earthquake Depth vs Magnitude")
       ) +
       theme_minimal()
   })
@@ -394,11 +406,12 @@ server <- function(input, output, session) {
       geom_col(fill = "darkred") +
       coord_flip() +
       labs(
-        title = ifelse(
-          input$selected_city != "",
-          paste("Top 5 Strongest Earthquakes within", RADIUS_MILES, "miles"),
-          "Top 5 Strongest Earthquakes"
-        ),
+        title = if (input$selected_city != "") {
+          paste("Top 5 Strongest Earthquakes within", RADIUS_MILES, "miles",
+                if (input$continent == "All") "" else paste("(", input$continent, ")",))
+        } else {
+          plot_title("Top 5 Strongest Earthquakes")
+        },
         x = "Location",
         y = "Magnitude"
       ) +
@@ -418,7 +431,7 @@ server <- function(input, output, session) {
         labs(
           x = "Depth (km)",
           y = "Count",
-          title = paste("Distribution of Earthquake Depths in", input$selected_year)
+          title = plot_title("Distribution of Earthquake Depths")
         ) +
         theme_minimal()
     }
@@ -428,10 +441,24 @@ server <- function(input, output, session) {
         labs(
           x = "Magnitude",
           y = "Count",
-          title = paste("Distribution of Earthquake Magnitudes in", input$selected_year)
+          title = plot_title("Distribution of Earthquake Magnitudes")
         ) +
         theme_minimal()
     }
+  })
+  
+  output$land_ocean_plot <- renderPlot({
+    df <- scatter_quakes() %>%
+      count(land_ocean)
+    
+    ggplot(df, aes(x = land_ocean, y = n, fill = land_ocean)) +
+      geom_col(show.legend = FALSE) +
+      labs(
+        x = "",
+        y = "Number of earthquakes",
+        title = plot_title("Land vs Ocean Earthquakes")
+      ) +
+      theme_minimal()
   })
 }
 
