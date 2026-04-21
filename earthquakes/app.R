@@ -6,6 +6,8 @@ library(lubridate)
 library(htmltools)
 library(ggplot2)
 library(tidyr)
+library(bslib)
+library(bsicons)
 
 get_continent <- function(lat, lon) {
   case_when(
@@ -69,81 +71,184 @@ continents <- sort(unique(quakes$continent))
 continents <- c(setdiff(continents, "Other / Ocean"), "Other / Ocean")
 
 ui <- fluidPage(
+  tags$head(
+    tags$style(HTML("
+      .well {
+        padding-top: 18px;
+        padding-bottom: 18px;
+        background-color: #f8f9fa;
+        border-radius: 14px;
+        border: 1px solid #e3e6ea;
+      }
+
+      .form-group {
+        margin-bottom: 18px;
+      }
+
+      .control-label {
+        font-weight: 700;
+      }
+
+      .sidebar-section {
+        margin-bottom: 22px;
+      }
+
+      .sidebar-help {
+        color: #555;
+        font-size: 13px;
+        margin-top: 4px;
+        margin-bottom: 0;
+      }
+
+      .stats-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      }
+
+      .stats-card-title {
+        font-weight: 700;
+        font-size: 16px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .tab-content {
+        padding-top: 14px;
+      }
+
+      .shiny-output-error-validation {
+        color: #666;
+      }
+
+      pre {
+        background-color: transparent;
+        border: none;
+        padding: 0;
+        margin: 0;
+        font-size: 13px;
+        white-space: pre-wrap;
+      }
+    "))
+  ),
   titlePanel("USGS Earthquakes Explorer"),
   sidebarLayout(
     sidebarPanel(
       width = 3,
-      sliderInput(
-        inputId = "selected_year",
-        label = "Select year:",
-        min = min_year,
-        max = max_year,
-        value = min_year,
-        step = 1,
-        sep = "",
-        animate = animationOptions(interval = 800, loop = FALSE)
-      ),
-      sliderInput(
-        inputId = "selected_mag",
-        label = "Select maximum magnitude:",
-        min = min_mag,
-        max = max_mag,
-        value = max_mag,
-        step = 0.1
-      ),
-      selectInput(
-        inputId = "continent",
-        label = "Select continent:",
-        choices = c("All", continents),
-        selected = "All"
-      ),
-      selectizeInput(
-        inputId = "selected_city",
-        label = "Select city:",
-        choices = c("None (show all)" = "", setNames(cities$label, cities$label)),
-        selected = "",
-        options = list(
-          placeholder = "Search for a city...",
-          maxOptions = 50
-        )
-      ),
-      conditionalPanel(
-        condition = "input.selected_city != ''",
-        actionButton(
-          "clear_city",
-          "Clear city filter",
-          class = "btn-sm btn-outline-secondary",
-          style = "margin-top: 4px;"
-        )
-      ),
-      p("Hover over a point to view earthquake details."),
-      h4("Summary Statistics"),
-      verbatimTextOutput("summary_stats"),
       
-      h4("Local Risk Insight"),
-      verbatimTextOutput("city_stats")
+      div(
+        class = "sidebar-section",
+        sliderInput(
+          inputId = "selected_year",
+          label = "Select year:",
+          min = min_year,
+          max = max_year,
+          value = min_year,
+          step = 1,
+          sep = "",
+          animate = animationOptions(interval = 800, loop = FALSE)
+        )
+      ),
+      
+      div(
+        class = "sidebar-section",
+        sliderInput(
+          inputId = "selected_mag",
+          label = "Select maximum magnitude:",
+          min = min_mag,
+          max = max_mag,
+          value = max_mag,
+          step = 0.1
+        )
+      ),
+      
+      div(
+        class = "sidebar-section",
+        selectInput(
+          inputId = "continent",
+          label = "Select continent:",
+          choices = c("All", continents),
+          selected = "All"
+        )
+      ),
+      
+      div(
+        class = "sidebar-section",
+        selectizeInput(
+          inputId = "selected_city",
+          label = "Select city:",
+          choices = c("None (show all)" = "", setNames(cities$label, cities$label)),
+          selected = "",
+          options = list(
+            placeholder = "Search for a city...",
+            maxOptions = 50
+          )
+        ),
+        conditionalPanel(
+          condition = "input.selected_city != ''",
+          actionButton(
+            "clear_city",
+            "Clear city filter",
+            class = "btn-sm btn-outline-secondary",
+            style = "margin-top: 4px;"
+          )
+        )
+      ),
+      
+      div(
+        class = "sidebar-section",
+        p("Hover over a point to view earthquake details.", class = "sidebar-help")
+      ),
+      
+      div(
+        class = "stats-card",
+        div(class = "stats-card-title", "Summary Statistics"),
+        verbatimTextOutput("summary_stats")
+      ),
+      
+      div(
+        class = "stats-card",
+        div(
+          class = "stats-card-title",
+          "Local Risk Insight",
+          tooltip(
+            bs_icon("info-circle"),
+            "Shows the number of earthquakes within 50 miles of the selected city and the strongest nearby magnitude.",
+            placement = "right"
+          )
+        ),
+        verbatimTextOutput("city_stats")
+      )
     ),
     mainPanel(
       width = 9,
       leafletOutput("quake_map", height = 400),
       br(),
       tabsetPanel(
-        tabPanel("Scatter Plot",
-                 plotOutput("scatter", height = 300)
+        tabPanel(
+          "Scatter Plot",
+          plotOutput("scatter", height = 300)
         ),
-        tabPanel("Depth Histogram",
-                 radioButtons(
-                   "hist_var",
-                   "",
-                   choices = c("Depth" = "depth", "Magnitude" = "mag")
-                 ),
-                 plotOutput("hist_depth", height = 300)
+        tabPanel(
+          "Depth Histogram",
+          radioButtons(
+            "hist_var",
+            "",
+            choices = c("Depth" = "depth", "Magnitude" = "mag")
+          ),
+          plotOutput("hist_depth", height = 300)
         ),
-        tabPanel("Top Earthquakes",
-                 br(),
-                 plotOutput("top_quakes_plot", height = 300),
-                 br(),
-                 tableOutput("top_quakes_table")
+        tabPanel(
+          "Top Earthquakes",
+          br(),
+          plotOutput("top_quakes_plot", height = 300),
+          br(),
+          tableOutput("top_quakes_table")
         )
       )
     )
@@ -158,6 +263,13 @@ server <- function(input, output, session) {
       paste0(base, " in ", input$continent, " (", input$selected_year, ")")
     }
   }
+  
+  plot_style <- theme_minimal() +
+    theme(
+      plot.title = element_text(face = "bold", size = 15, margin = margin(b = 10)),
+      axis.title = element_text(face = "bold"),
+      legend.title = element_text(face = "bold")
+    )
   
   selected_city_data <- reactive({
     req(input$selected_city)
@@ -321,12 +433,9 @@ server <- function(input, output, session) {
   })
   
   top_quakes <- reactive({
-    
-    # Case 1: city selected → use radius-filtered data
     if (!is.null(input$selected_city) && input$selected_city != "") {
       df <- filtered_quakes()
     } else {
-      # Case 2: no city → use continent/year filter only
       df <- year_continent_quakes()
     }
     
@@ -334,7 +443,6 @@ server <- function(input, output, session) {
       arrange(desc(mag)) %>%
       slice_head(n = 5)
   })
-  
   
   output$top_quakes_table <- renderTable({
     top_quakes() %>%
@@ -362,9 +470,9 @@ server <- function(input, output, session) {
         x = "Depth (km)",
         y = "Magnitude",
         color = "Magnitude Category",
-        title = plot_title("Earthquake Depth vs Magnitude")
+        title = plot_title("Earthquake Depth vs. Magnitude")
       ) +
-      theme_minimal()
+      plot_style
   })
   
   output$summary_stats <- renderText({
@@ -376,6 +484,7 @@ server <- function(input, output, session) {
       "Max magnitude: ", round(max(data$mag, na.rm = TRUE), 2)
     )
   })
+  
   output$city_stats <- renderText({
     data <- filtered_quakes()
     
@@ -387,13 +496,14 @@ server <- function(input, output, session) {
     
     paste0(
       "Earthquakes within 50 miles: ", total, "\n",
-      ifelse(total > 0,
-             paste0("Strongest nearby magnitude: ", round(max(data$mag), 2)),
-             "No recent nearby earthquakes")
+      ifelse(
+        total > 0,
+        paste0("Strongest nearby magnitude: ", round(max(data$mag), 2)),
+        "No recent nearby earthquakes"
+      )
     )
   })
   
-  #adjusting bar graph of magnitudes 
   output$top_quakes_plot <- renderPlot({
     df <- top_quakes()
     
@@ -402,25 +512,22 @@ server <- function(input, output, session) {
       coord_flip() +
       labs(
         title = if (input$selected_city != "") {
-          paste("Top 5 Strongest Earthquakes within", RADIUS_MILES, "miles",
-                if (input$continent == "All") "" else paste("(", input$continent, ")",))
+          paste0(
+            "Top 5 Strongest Earthquakes within ", RADIUS_MILES, " miles of ", input$selected_city, " (", input$selected_year, ")"
+          )
         } else {
-          plot_title("Top 5 Strongest Earthquakes")
+          paste0("Top 5 Strongest Earthquakes", if (input$continent == "All") "" else paste(" in", input$continent), " (", input$selected_year, ")")
         },
         x = "Location",
         y = "Magnitude"
       ) +
-      theme_minimal()
+      plot_style
   })
-  
-  
-  
-  #depth histogram
   
   output$hist_depth <- renderPlot({
     data <- scatter_quakes()
     
-    if(input$hist_var == "depth"){
+    if (input$hist_var == "depth") {
       ggplot(data, aes(x = depth)) +
         geom_histogram(bins = 10, fill = "steelblue", color = "white") +
         labs(
@@ -428,9 +535,8 @@ server <- function(input, output, session) {
           y = "Count",
           title = plot_title("Distribution of Earthquake Depths")
         ) +
-        theme_minimal()
-    }
-    else {
+        plot_style
+    } else {
       ggplot(data, aes(x = mag)) +
         geom_histogram(bins = 10, fill = "purple", color = "white") +
         labs(
@@ -438,7 +544,7 @@ server <- function(input, output, session) {
           y = "Count",
           title = plot_title("Distribution of Earthquake Magnitudes")
         ) +
-        theme_minimal()
+        plot_style
     }
   })
 }
