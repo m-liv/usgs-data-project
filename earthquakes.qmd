@@ -43,7 +43,7 @@ Most earthquakes cluster at shallow depths with low magnitudes, but even at grea
 
 ![](strongest_earthquakes.png)
 
-Although most earthquakes are small, a few stand out as significantly stronger. These high-magnitude events are rare but concentrated in specific regions, often along major tectonic boundaries. By examining the strongest earthquakes, we see that these events are not evenly distributed. Instead, they tend to occur in areas already known for seismic activity. This reinforces the idea that while earthquakes are common, meaningful risk is concentrated in particular locations.
+Although most earthquakes are small, a few stand out as significantly stronger. These high-magnitude events are rare but concentrated in specific regions, often along major tectonic boundaries. One notable example is the Australian Plate, which has a boundary crossing through Indonesia exactly where some of the strongest earthquakes were seen in 2016. By examining the strongest earthquakes, we see that these events are not randomly distributed; instead, they tend to occur in areas already known for seismic activity. This reinforces the idea that while earthquakes are common, meaningful risk is concentrated in particular locations.
 
 ## Conclusion
 
