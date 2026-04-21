@@ -31,10 +31,6 @@ quakes <- read_csv("usgs_sampled2.csv", show_col_types = FALSE) %>%
       mag >= 3 & mag < 5 ~ "Medium (3-5)",
       mag >= 5 ~ "High (>=5)",
       TRUE ~ "Unknown"
-    ),
-    land_ocean = case_when(
-      grepl("ocean|sea|gulf|offshore|mid-atlantic|ridge|trench|channel|strait|bay", place, ignore.case = TRUE) ~ "Ocean",
-      TRUE ~ "Land"
     )
   ) %>%
   drop_na(mag, depth, latitude, longitude)
@@ -148,11 +144,6 @@ ui <- fluidPage(
                  plotOutput("top_quakes_plot", height = 300),
                  br(),
                  tableOutput("top_quakes_table")
-        ),
-        tabPanel(
-          "Land vs Ocean",
-          br(),
-          plotOutput("land_ocean_plot", height = 300)
         )
       )
     )
@@ -449,20 +440,6 @@ server <- function(input, output, session) {
         ) +
         theme_minimal()
     }
-  })
-  
-  output$land_ocean_plot <- renderPlot({
-    df <- scatter_quakes() %>%
-      count(land_ocean)
-    
-    ggplot(df, aes(x = land_ocean, y = n, fill = land_ocean)) +
-      geom_col(show.legend = FALSE) +
-      labs(
-        x = "",
-        y = "Number of earthquakes",
-        title = plot_title("Land vs Ocean Earthquakes")
-      ) +
-      theme_minimal()
   })
 }
 
