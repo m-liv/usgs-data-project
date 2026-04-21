@@ -65,7 +65,7 @@ haversine_miles <- function(lat1, lng1, lat2, lng2) {
   2 * R * asin(sqrt(a))
 }
 
-RADIUS_MILES <- 50
+RADIUS_MILES <- 100
 
 continents <- sort(unique(quakes$continent))
 continents <- c(setdiff(continents, "Other / Ocean"), "Other / Ocean")
@@ -159,10 +159,10 @@ ui <- fluidPage(
         class = "sidebar-section",
         sliderInput(
           inputId = "selected_mag",
-          label = "Select maximum magnitude:",
+          label = "Filter by magnitude:",
           min = min_mag,
           max = max_mag,
-          value = max_mag,
+          value = c(min_mag, max_mag),
           step = 0.1
         )
       ),
@@ -231,11 +231,11 @@ ui <- fluidPage(
       br(),
       tabsetPanel(
         tabPanel(
-          "Scatter Plot",
+          "Depth vs. Magnitude",
           plotOutput("scatter", height = 300)
         ),
         tabPanel(
-          "Depth Histogram",
+          "Depth and Magnitude Distributions",
           radioButtons(
             "hist_var",
             "",
@@ -244,8 +244,12 @@ ui <- fluidPage(
           plotOutput("hist_depth", height = 300)
         ),
         tabPanel(
-          "Top Earthquakes",
+          "Top Earthquakes by Magnitude",
           br(),
+          conditionalPanel(
+            condition = "input.selected_city != ''",
+            uiOutput("top_quakes_message")
+          ),
           plotOutput("top_quakes_plot", height = 300),
           br(),
           tableOutput("top_quakes_table")
@@ -268,8 +272,24 @@ server <- function(input, output, session) {
     theme(
       plot.title = element_text(face = "bold", size = 15, margin = margin(b = 10)),
       axis.title = element_text(face = "bold"),
-      legend.title = element_text(face = "bold")
+      legend.title = element_text(face = "bold"),
+      legend.position = "right"
     )
+  
+  colors <- list(
+    primary = "#2c7bb6",   # blue
+    secondary = "#abd9e9", # light blue
+    accent = "#fdae61",    # orange
+    highlight = "#d7191c", # red
+    neutral = "#6c757d"    # gray
+  )
+  
+  mag_colors <- c(
+    "Low (<3)" = colors$primary,
+    "Medium (3-5)" = colors$accent,
+    "High (>=5)" = colors$highlight,
+    "Unknown" = colors$neutral
+  )
   
   selected_city_data <- reactive({
     req(input$selected_city)
@@ -296,7 +316,10 @@ server <- function(input, output, session) {
   # Map filter: year, continent, max magnitude, and city radius
   filtered_quakes <- reactive({
     df <- year_continent_quakes() %>%
-      filter(mag <= input$selected_mag)
+      filter(
+        mag >= input$selected_mag[1],
+        mag <= input$selected_mag[2]
+      )
     
     if (!is.null(input$selected_city) && input$selected_city != "") {
       city_row <- selected_city_data()
@@ -445,7 +468,13 @@ server <- function(input, output, session) {
   })
   
   output$top_quakes_table <- renderTable({
-    top_quakes() %>%
+    df <- top_quakes()
+    
+    if (!is.null(input$selected_city) && input$selected_city != "" && nrow(df) == 0) {
+      return(NULL)
+    }
+    
+    df %>%
       select(
         place,
         mag,
@@ -459,13 +488,8 @@ server <- function(input, output, session) {
     data <- scatter_quakes()
     
     ggplot(data, aes(x = depth, y = mag, color = mag_cat)) +
-      geom_point(alpha = 0.7, size = 2) +
-      scale_color_manual(values = c(
-        "Low (<3)" = "blue",
-        "Medium (3-5)" = "green",
-        "High (>=5)" = "red",
-        "Unknown" = "gray"
-      )) +
+      geom_point(alpha = 0.75, size = 2) +
+      scale_color_manual(values = mag_colors) +
       labs(
         x = "Depth (km)",
         y = "Magnitude",
@@ -477,6 +501,14 @@ server <- function(input, output, session) {
   
   output$summary_stats <- renderText({
     data <- filtered_quakes()
+    
+    if (!is.null(input$selected_city) && input$selected_city != "" && nrow(data) == 0) {
+      return(paste0(
+        "Earthquakes shown: 0\n",
+        "Average magnitude: N/A\n",
+        "Max magnitude: N/A"
+      ))
+    }
     
     paste0(
       "Earthquakes shown: ", nrow(data), "\n",
@@ -507,16 +539,25 @@ server <- function(input, output, session) {
   output$top_quakes_plot <- renderPlot({
     df <- top_quakes()
     
+    if (!is.null(input$selected_city) && input$selected_city != "" && nrow(df) == 0) {
+      return(NULL)
+    }
+    
     ggplot(df, aes(x = reorder(place, mag), y = mag)) +
-      geom_col(fill = "darkred") +
+      geom_col(fill = colors$highlight, alpha = 0.9) +
       coord_flip() +
       labs(
         title = if (input$selected_city != "") {
           paste0(
-            "Top 5 Strongest Earthquakes within ", RADIUS_MILES, " miles of ", input$selected_city, " (", input$selected_year, ")"
+            "Strongest Earthquakes within ", RADIUS_MILES, " miles of ",
+            input$selected_city, " (", input$selected_year, ")"
           )
         } else {
-          paste0("Top 5 Strongest Earthquakes", if (input$continent == "All") "" else paste(" in", input$continent), " (", input$selected_year, ")")
+          paste0(
+            "Strongest Earthquakes",
+            if (input$continent == "All") "" else paste(" in", input$continent),
+            " (", input$selected_year, ")"
+          )
         },
         x = "Location",
         y = "Magnitude"
@@ -524,12 +565,23 @@ server <- function(input, output, session) {
       plot_style
   })
   
+  output$top_quakes_message <- renderUI({
+    df <- top_quakes()
+    
+    if (!is.null(input$selected_city) && input$selected_city != "" && nrow(df) == 0) {
+      div(
+        style = "font-weight: 600; margin-bottom: 12px;",
+        "No earthquakes match the criteria."
+      )
+    }
+  })
+  
   output$hist_depth <- renderPlot({
     data <- scatter_quakes()
     
     if (input$hist_var == "depth") {
       ggplot(data, aes(x = depth)) +
-        geom_histogram(bins = 10, fill = "steelblue", color = "white") +
+        geom_histogram(bins = 10, fill = colors$primary, color = "white", alpha = 0.9) +
         labs(
           x = "Depth (km)",
           y = "Count",
@@ -538,7 +590,7 @@ server <- function(input, output, session) {
         plot_style
     } else {
       ggplot(data, aes(x = mag)) +
-        geom_histogram(bins = 10, fill = "purple", color = "white") +
+        geom_histogram(bins = 10, fill = colors$accent, color = "white") +
         labs(
           x = "Magnitude",
           y = "Count",
