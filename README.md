@@ -1,7 +1,4 @@
----
-title: "USGS Earthquake Dashboard"
-output: html_document
----
+
 
 ## USGS Earthquake Dashboard
 
