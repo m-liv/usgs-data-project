@@ -22,7 +22,7 @@ get_continent <- function(lat, lon) {
 }
 
 # Load data
-quakes <- read_csv("usgs_sampled2.csv", show_col_types = FALSE) %>%
+quakes <- read_csv("data/usgs_sampled2.csv", show_col_types = FALSE) %>%
   mutate(
     time = lubridate::parse_date_time(time, orders = c("Ymd HMS", "Y-m-d H:M:S")),
     year = year(time),
@@ -43,7 +43,7 @@ min_mag <- floor(min(quakes$mag, na.rm = TRUE))
 max_mag <- ceiling(max(quakes$mag, na.rm = TRUE))
 
 # Load cities data
-cities <- read_csv("worldcities.csv", show_col_types = FALSE) %>%
+cities <- read_csv("data/simplemaps_worldcities_basicv1.901/worldcities.csv", show_col_types = FALSE) %>%
   filter(!is.na(lat), !is.na(lng)) %>%
   mutate(
     city_name = coalesce(city_ascii, city),

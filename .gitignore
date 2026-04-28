@@ -4,6 +4,9 @@
 *.Rhistory
 *.html
 
+earthquakes_files
+.quarto
+
 .DS_Store
 
 # Byte-compiled / optimized / DLL files
